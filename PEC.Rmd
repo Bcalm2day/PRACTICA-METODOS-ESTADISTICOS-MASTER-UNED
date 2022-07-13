@@ -1,0 +1,1107 @@
+---
+title: "PEC"
+author: "Daniel Rodriguez Fustes"
+date: "12/1/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+**Ejercicio 1.**
+
+**Función de Producción de Cobb Douglas**
+
+**La base de datos nativa de R RDPerfComp, que se encuentra en la liberia pder, contiene datos de 509 empresas de USA corresondientes a los años 1982 a 1989, tomados de Blundell, Richard and Stephen Bond (2000) “GMM estimation with persistent panel data: an application to production functions”, Econometric Reviews, 19(3), 321-340.**
+
+**La estructura de la base de datos es la siguiente:**
+
+**–	id: identificador de la empresa**
+
+**–	year: año**
+
+**–	y: producción en logaritmo**
+
+**–	n: Empleo en logaritmo**
+
+**–	k: Capital en logaritmo**
+
+
+```{r echo=FALSE}
+#Se cargan los datos
+suppressWarnings(suppressPackageStartupMessages(library(pder)))
+data("RDPerfComp")
+datos<-as.data.frame(RDPerfComp,stringsAsFactors = FALSE)
+```
+**•	Realice un histograma de la variable y, y estime un modelo GLM para la producción utilizando diferentes familias y links acordes con el histograma. Lógicamente, habrá familias que no se adecuen a estos datos, exponga cuales de estas familias y funciones de ligadura no deben de utilizarse e indique el porqué.**
+
+Se realiza un histograma de la variable "y":
+```{r echo=FALSE}
+hist(datos$y, main = "Histograma de RDPerfComp", xlab = "Producción en logaritmos", ylab = "Frecuencia", col = "palegoldenrod")
+cat('','\n\n')
+cat('','\n\n')
+```
+Se observa en el histograma que la distribución de los datos se aproxima a una normal.
+
+En este caso, al tratarse de una regresión sobre variables continuas, no son adecuadas las familias poisson (útil cuando la variable es un número entero, por ejemlo, en conteos), ni tampoco la familia binomial (útil cuando la variable dependiente es de tipo factor), tampoco la familia gamma (adecuada cuando la varianza crece de manera no lineal con respecto a la media).
+
+Las funciones vínculo identidad resultan las más adecuadas en este caso. Ya que las recíprocas (aquel en que la variable explicativa aparece en su forma inversa) tienen sentido únicamente cuando la variable dependiente tiene límites asintóticos (lo cual no ocurre en este caso).
+
+Se decide estimar un modelo GLM para la producción usando la familia gaussiana con función vínculo identidad:
+```{r echo=FALSE}
+suppressWarnings(suppressPackageStartupMessages(library(broom)))
+suppressWarnings(suppressPackageStartupMessages(library(kableExtra)))
+GLM.id<-glm(data=datos,y ~ n+k,family = gaussian(identity))
+GLM.id
+```
+
+
+**•	Realice lo mismo, pero con los datos en niveles.**
+
+Se transforman los datos en logaritmos a nivelves usando la función exp():
+```{r echo=FALSE}
+datos.niv<-exp(datos)
+```
+
+Se prueba ahora un modelo GLM para la producción con función vínculo identidad con distribución de errores gamma (datos en niveles):
+```{r echo=FALSE}
+GLM.gam.niv<-glm(data = datos.niv,y ~ n+k,family = Gamma(identity))
+GLM.gam.niv
+```
+
+**•	Comente los resultados de las regresiones que ha realizado y compare la bondad del ajuste de ambos modelos.**
+
+El primer modelo estimado con datos en logaritmos tanto en la variable dependiente como en las independientes es de tipo log-log o modelo de elasticidad constante. Estos modelos son adecuados cuando se tiene interés en corregir la posible heterocedasticidad, además, la interpretación de los parámetros es porcentual. Esto es, un cambio de un 1% en una de las variables independientes se traduce en un cambio porcentual sobre la variable dependiente por valor del parámetro estimado asociado a dicha variable independiente. Así pues, en el primer modelo estimado la interpretación es:
+
+- Por cada 1% que aumenta la variable de empleo, la variable producción aumenta en `r format(round(GLM.id$coefficients[2],2))`%.
+
+- Por cada 1% que aumenta la variable de capital, la variable producción aumenta en `r format(round(GLM.id$coefficients[3],2))`%.
+
+El segundo modelo estimado con datos en niveles es una regresión lineal estándar con una distribución de los errores de tipo gamma. En este modelo un cambio en una unidad en una de las variables explicativas se traduce en un cambio sobre la variable dependiente igual al valor del parámetro estimado asociado a dicha variable. Por tanto:
+
+- Por cada unidad que aumenta la variable de empleo, la variable producción aumenta en `r as.integer(GLM.gam.niv$coefficients[2])` unidades.
+
+- Por cada unidad que aumenta la variable de capital, la variable producción aumenta en `r format(round(GLM.gam.niv$coefficients[3],2))` unidades.
+
+Comparando los AIC se observa que el primer modelo obtiene `r as.integer(GLM.id$aic)` y el segundo modelo `r as.integer(GLM.gam.niv$aic)`, siendo mucho menor, y por tanto preferible, el primer modelo.
+
+El modelo en logaritmos obtiene un ajuste más adecuado, posiblemente debido a que las variables en logaritmos corrigen la heterocedasticidad.
+
+**•	Presente el sumario de resultados y el gráfico de XY con los puntos reales y los datos estimados, especificando en el título la función estimada.**
+
+Sumario de resultados de la estimación del modelo $y_t=\beta_0 +\beta_1 n_t + \beta_2 k_t + e_t$  con los datos en logaritmos:
+```{r echo=FALSE}
+summary(GLM.id)
+```
+Gráfico de la estimación del modelo $y_t=\beta_0 +\beta_1 n_t + \beta_2 k_t + e_t$ :
+```{r echo=FALSE}
+cat('','\n\n')
+suppressWarnings(suppressPackageStartupMessages(library(car)))
+avPlots(GLM.id,main = "Modelo GLM",col="lightseagreen")
+plot(datos$y,GLM.id$fitted.values, main="Modelo GLM",col="lightseagreen")
+```
+
+**•	Realice un pronóstico de y correspondiente a una empresa con 30 empleados. En el pronóstico presente los intervalos de confianza al 95% y 90%. Presente el pronóstico en niveles de producción.**
+
+Se considera la media para el capital.
+```{r echo=FALSE}
+mean.k<-mean(datos$k)
+```
+La media del capital (en logaritmos) es `r format(round(mean.k,2))`
+
+```{r echo=FALSE}
+nuevosdatos<-data.frame(n=log(30),k=mean.k)
+pred<-predict.glm(object = GLM.id,newdata = nuevosdatos,se.fit = T)
+```
+El nivel de producción esperado es `r as.integer(exp(pred$fit))`
+
+```{r echo=FALSE}
+IC.95<-qnorm(0.975)
+upr<-pred$fit+IC.95*pred$se.fit
+lwr<-pred$fit-IC.95*pred$se.fit
+```
+Los intervalos de confianza al 95% son [`r as.integer(exp(lwr))` , `r as.integer(exp(upr))`]
+
+```{r echo=FALSE}
+IC.90<-qnorm(0.95)
+upr.90<-pred$fit+IC.90*pred$se.fit
+lwr.90<-pred$fit-IC.90*pred$se.fit
+```
+Los intervalos de confianza al 90% son [`r as.integer(exp(lwr.90))` , `r as.integer(exp(upr.90))`]
+
+
+**Ejercicio 2**
+
+**Diseño experimental**
+
+**Un investigador se propone estudiar el desarrollo de la aptitud en análisis de datos de un determinado grupo de estudiantes. A tal propósito, confecciona una serie de tareas estandarizadas, consistentes en el desarrollo de cuatro modelos de análisis. Estas tareas son presentadas a los estudiantes, cuando realizan las evaluaciones. Las evaluaciones son programadas de forma secuencial a lo largo del curso.**
+
+**Por último, el rendimiento en la resolución de los modelos es valorado con una escala de 10 puntos. Dado que el investigador considera de interés estudiar la posible diferencia atribuible al género, elige dos muestras iguales de escolares de uno y otro género. Los resultados se muestran en el fichero Notas.xlsx.**
+
+**•	¿Qué tipo de modelo es el más adecuado para este análisis? Realice un dibujo representando dicho modelo.**
+
+Se dedice especificar un modelo con variable dependiente "Calificacion" y como variable explicativa "Sexo". La variable dependiente es de tipo cuantitativo. Se procede a establecer la clase de la variable explicativa "Sexo" como factor. Se decide suprimir del estudio las variables "Prueba" y"Sujeto" puesto que se considera que no pueden aportar valor al estudio. 
+
+El modelo elegido será de tipo ANOVA $Y_i=\beta_0 +\mu_1 D_1 + u_i$
+```{r echo=FALSE}
+# Se cargan los datos
+suppressWarnings(suppressPackageStartupMessages(library(readxl)))
+notas<-read_excel("C:/Users/rojo_/Desktop/MASTER/PRIMER CUATRIMESTRE 2019-2020/METODOS ESTADISTICOS/PEC 2021-2022/PEC_2020-21/Notas.xlsx")
+# Se convierte el conjunto de datos en un dataframe
+notas<-as.data.frame(notas)
+# Se convierten a factores las variables Sexo y Prueba
+notas[,"Sexo"]<-as.factor(notas[,"Sexo"])
+tabla<-model.tables(aov(Calificacion~Sexo,data=notas),type = "means")
+```
+
+Se muestra un dibujo donde se representan en diagramas de caja las distribuciones de las dos variables objeto de estudio:
+```{r echo=FALSE}
+suppressWarnings(suppressPackageStartupMessages(library(ggplot2)))
+ggplot(notas,aes(Sexo,Calificacion)) + geom_boxplot(fill="palegoldenrod")
+cat('','\n\n')
+```
+
+Se puede observar que ambas distribuciones son muy similares, con una mediana prácticamente igual. El tercer cuartil también tiene el mismo valor en ambas variables. También se puede observar que la varianza es similar para los dos conjuntos de datos, lo cual es importante, ya que se cumple la hipótesis de homocedasticidad, que es necesaria para poder realizar un modelo de análisis de la varianza. Los valores mínimos y máximos también son similares.
+
+**•	Haga un análisis descriptivo de los datos teniendo en cuenta los factores definidos.**
+
+En primer lugar se realiza el test de Levene para contrastar la hipótesis nula de homocedasticidad de la varianza:
+```{r echo=FALSE}
+suppressWarnings(suppressPackageStartupMessages(library(car)))
+levene<-leveneTest(notas$Calificacion,notas$Sexo,center="mean")
+kable(levene[1,])%>%kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
+cat('','\n\n')
+```
+El p-valor del estadístico es superior a 0.05 por lo que no se puede rechazar la hipótesis nula de homocedasticidad de la varianza.
+
+En segundo lugar se presenta la frecuencia de los datos y se realiza el test de Saphiro para contrastar la hipótesis nula de normalidad:
+```{r echo=FALSE}
+hist(notas$Calificacion, main = "Histograma de Calificaciones", xlab = "Calificación", ylab = "Frecuencia", col = "palegoldenrod",breaks = 5,ylim=c(0,14))
+cat('','\n\n')
+```
+
+Visualmente se aproxima a una normal, aunque los datos de "Calificaciones" son claramente discretos.
+
+Tests de normalidad de Saphiro por cada valor que toma el factor "Sexo":
+```{r echo=FALSE}
+calif<-split(notas$Calificacion,notas$Sexo)
+calif.1<-unlist(calif[1])
+calif.2<-unlist(calif[2])
+saph.1<-shapiro.test(calif.1)
+saph.2<-shapiro.test(calif.2)
+kable(tidy(saph.1))%>%kable_styling(bootstrap_options = "striped",full_width = F, position = "left")
+kable(tidy(saph.2))%>%kable_styling(bootstrap_options = "striped",full_width = F, position = "left")
+```
+
+Los test de Saphiro han resultado con p-valores inferiores a 0.05 por lo que se rechaza la hipótesis nula de normalidad. Pero, como se sabe que la media se encuentra en `r tabla$tables[1]` y la mediana es `r round(median(notas$Calificacion,2))` y viendo el histograma, se considera la normalidad en la distribución.
+
+En tercer lugar, se van a comparar las medias mediante el test de Tukey:
+```{r echo=FALSE}
+suppressWarnings(suppressPackageStartupMessages(library(multcomp)))
+summary(glht(model=aov(Calificacion~Sexo,data=notas),linfct=mcp(Sexo="Tukey")))
+cat('','\n\n')
+```
+El estadístico Scheffe ha resultado no significativo, ya que su p-valor es mayor a 0.05
+
+Por tanto, no se puede rechazar la hipótesis nula de medias iguales entre los dos sexos.
+
+**•	Estime el modelo anteriormente planteado, comente los resultados obtenidos y establezca las conclusiones pertinentes derivadas de este estudio.**
+
+Se muestra el resultado de la estimación del modelo $Y_i=\beta_0 +\mu_1 D_1 + u_i$
+```{r echo=FALSE}
+# Se genera el modelo ANOVA
+summary(aov(Calificacion~Sexo,data=notas))
+```
+La variable "Sexo" ha resultado ser no significativa, ya que el p-valor es superior a 0.05
+
+La media de calificación global de los datos es `r tabla$tables[1]`
+
+La media de calificación del sexo 1 es `r tabla$tables$Sexo[1]`
+
+La media de calificación del sexo 2 es `r tabla$tables$Sexo[2]`
+
+Conclusión: la variable explicativa "Sexo" no resulta significativa ni siquiera al 90%. Además, los tests descriptivos realizados apuntan a que no hay diferencias entre las medias de ambos sexos en relación con las calificaciones obtenidas, por lo que la conclusión es que la variable sexo no es un factor diferencial de las calificaciones obtenidas por los estudidantes.
+
+
+
+**3. Análisis factorial y Análisis Cluster**
+
+**En el fichero de calidad_vida.csv figuran los datos de 2017 por Comunidades Autónomas relativos a la DIMENSIÓN 1. CONDICIONES MATERIALES DE VIDA, de los indicadores de calidad de vida que publica el Institituto Nacional de Estadística.**
+
+**Los Subdominios e Indicadores parciales de la Dimensión 1 son los siguientes:**
+
+**1.1. Condiciones económicas**
+
+**1.1.1. Renta media y mediana** 
+
+**1.1.2. Población en riesgo de pobreza relativa según distintos umbrales** 
+
+**1.1.4. Desigualdad (S80/S20)** 
+
+**1.1.5. Satisfacción con la situación económica del hogar** 
+
+**1.2. Condiciones materiales**
+
+**1.2.1. Dificultades para llegar a fin de mes** 
+
+**1.2.2. Carencia material** 
+
+**1.2.3. Población que vive en hogares con determinadas deficiencias en la Vivienda**
+
+**1.2.4. Población con falta de espacio en la vivienda** 
+
+**1.2.5. Población con gasto elevado en vivienda** 
+
+**1.2.6. Satisfacción con la vivienda** 
+
+**1.3. Seguridad económica** 
+
+**1.3.2. Incapacidad de hacer frente a gastos económicos imprevistos** 
+
+**1.3.3. Retrasos en los pagos**
+
+**•	Lea el fichero, y realice las pruebas pertinentes para ver si el conjunto de datos puede ser objeto de análisis factorial. De ser cierto, plantee una análisis factorial con la libreria “psych”, respondiendo que criterio ha elegido para seleccionar los factores y que porcentaje de varianza explican los factores elegidos. Interprete el significado de dichos factores.**
+
+```{r echo=FALSE}
+# Se lee el fichero csv
+calidad<-read.csv("C:/Users/rojo_/Desktop/MASTER/PRIMER CUATRIMESTRE 2019-2020/METODOS ESTADISTICOS/PEC 2021-2022/PEC_2020-21/calidad_vida.csv",header = T,sep = ";")
+# Se convierte a dataframe el conjunto de datos
+calidad<-as.data.frame(calidad)
+```
+
+Una vez cargados los datos se observa que solamente se disponen de 19 observaciones para un total de 13 variables. Si se intenta estimar un modelo econométrico sin reducir la dimensionalidad se tendrá un problema en relación con los grados de libertad y los resultados no serán fiables.
+
+Por este motivo, tiene sentido intentar agrupar las variables que están correlacionadas entre sí y crear un factor por cada grupo de variables correlacionadas. Los factores que se generen estarán incorrelacionados.
+
+En primer lugar, para averiguar si es posible realizar un análisis factorial se comprueba si existe multicolinealidad aproximada entre todas las variables numéricas. Se genera un gráfico con la matriz de correlaciones:
+```{r echo=FALSE}
+suppressWarnings(suppressPackageStartupMessages(library(PerformanceAnalytics)))
+chart.Correlation(calidad[,2:13], histogram = F, pch = 10,floating= FALSE)
+cat('','\n\n')
+cat('','\n\n')
+```
+
+Se observa que existe una alta correlación entre muchas de las variables, por lo que el conjunto de datos parece adecuado para estudiar mediante el análisis factorial. 
+
+Tras la inspección visual del gráfico de correlaciones se crea la matriz de correlaciones y se procede a realizar el test de Bartlett.
+```{r echo=FALSE}
+suppressWarnings(suppressPackageStartupMessages(library(psych)))
+cor.calidad<-cor(calidad[,2:13])
+bartlett<-cortest.bartlett(cor.calidad,n=nrow(calidad))
+```
+
+El test de Bartlett brinda un p-valor de `r bartlett$p.value` que es inferior a 0.05 por lo que el estadístico es significativo, es decir, se rechaza la hipótesis nula y por lo tanto la matriz de correlaciones no es una matriz identidad lo que implica que su determinante es aproximadamente cero, lo cual nos indica que las variables están correlacionadas y pueden ser objeto de un análisis factorial.
+
+Se calcula el test Kaiser-Meyer-Olkin para evaluar lo adecuado que es el conjunto de datos para realizar el análisis factorial.
+```{r echo=FALSE}
+KMO<-KMO(cor.calidad)
+```
+El resultado del KMO es `r KMO$MSA` que es un valor mediocre pero suficiente para realizar el análisis factorial.
+
+Se procede a realizar el análisis factorial para extraer los factores.
+
+En primer lugar, se procura averiguar el número de factores que se deben crear, para ello se realiza el gráfico de sedimientación para elegir el número óptimo de factores según los autovalores:
+
+```{r echo=FALSE, warning=FALSE}
+fa.parallel(cor.calidad,n.obs=length(calidad))
+```
+
+El resultado del análisis paralelo nos sugiere establecer el número de factores en uno.
+El gráfico de sedimientación nos sugiere extraer 2 o 3 factores. Puesto que solamente se disponen de 19 observaciones,se decide establecer el número de factores extraídos en dos.
+
+Se realiza el análisis factorial  de máxima verosimilitud sin rotación para comprobar el porcentaje de la varianza que explican los factores extraídos.
+```{r echo=FALSE, warning=FALSE}
+analisis.fact<-factanal(calidad[,2:13],factors = 2, rotation = "none" , scores = "Bartlett")
+analisis.fact
+```
+
+Se observa que el factor 1 explica el 50,2% de la varianza común y el factor 2 explica el 14,4% de la varianza común. Los dos factores explican de forma conjunta el 64,6% de la varianza común.
+
+Las variables más representadas en cada factor son:
+
+* Factor 1: 
+  + X1.1.1..Renta.mediana                                                               
+  + X1.1.2..Población.en.riesgo.de.pobreza.relativa.según.distintos.umbrales             
+  + X1.1.4..Desigualdad                                                                  
+  + X1.1.5..Satisfacción.alta.o.muy.alta.con.la.situación.económica.del.hogar           
+  + X1.2.1..Dificultades.medias..altas.para.llegar.a.fin.de.mes                          
+  + X1.2.2..Carencia.material.severa.SENTIDO....                                         
+  + X1.2.3..Población.que.vive.en.hogares.con.determinadas.deficiencias.en.la.vivienda   
+  + X1.2.6..Satisfacción.alta.o.muy.alta.con.la.vivienda                                
+  + X1.3.2..Incapacidad.de.hacer.frente.a.gastos.económicos.imprevistos                  
+  + X1.3.3..Retrasos.en.los.pagos                                                        
+ 
+* Factor 2: 
+  + X1.2.4..Población.con.falta.de.espacio.en.la.vivienda                               
+  + X1.2.5..Población.con.gasto.elevado.en.vivienda                                      
+ 
+**•	Realice el mismo análisis con la librería rela. ¿Son equivalentes los resultados obtenidos? Exponga las diferencias.**
+
+La librería rela permite ejecutar el análisis factorial de eje principal.
+
+En primer lugar, se muestra el gráfico de barras con el número de factores que el eje principal va a extraer (factores con autovalores superior a 1):
+```{r echo=FALSE}
+suppressWarnings(suppressPackageStartupMessages(library(rela)))
+analisis.paf<-paf(as.matrix(calidad[,2:13]))
+barplot(analisis.paf$Eigenvalues[,1],main="Extracción de factores por eje principal",xlab = "Número de factores",ylab="Autovalores",names.arg = 1:12,col="palegoldenrod")
+abline(h=1,col="red")
+cat('','\n\n')
+```
+
+El eje principal extrae 3 factores. A continuación, se muestra la carga factorial.
+```{r echo=FALSE}
+analisis.paf.v<-varimax(analisis.paf$Factor.Loading)
+analisis.paf.v
+```
+Se observa que el factor 1 explica el 34,3% de la varianza común, el factor 2 explica el 21,9% de la varianza común y el factor 3 explica el 19,2%. Los tres factores explican de forma conjunta el 75,4% de la varianza común.
+
+Las variables más representadas en cada factor son:
+
+* Factor 1: 
+  + X1.1.2..Población.en.riesgo.de.pobreza.relativa.según.distintos.umbrales
+  + X1.2.1..Dificultades.medias..altas.para.llegar.a.fin.de.mes
+  + X1.2.2..Carencia.material.severa.SENTIDO....
+  + X1.2.5..Población.con.gasto.elevado.en.vivienda
+  + X1.3.2..Incapacidad.de.hacer.frente.a.gastos.económicos.imprevistos
+  + X1.3.3..Retrasos.en.los.pagos
+* Factor 2: 
+  + X1.1.1..Renta.mediana
+  + X1.1.5..Satisfacción.alta.o.muy.alta.con.la.situación.económica.del.hogar
+  + X1.2.6..Satisfacción.alta.o.muy.alta.con.la.vivienda
+* Factor 3: 
+  + X1.1.4..Desigualdad
+  + X1.2.3..Población.que.vive.en.hogares.con.determinadas.deficiencias.en.la.vivienda
+  + X1.2.4..Población.con.falta.de.espacio.en.la.vivienda
+
+
+
+**•	A la vista de ambos análisis: ¿Agruparía las variables en los subdominios que utiliza el INE?**
+
+Debido a alta correlación entre las variables del conjunto de datos, parece adecuado agrupar por factores las variables que son similares entre sí. Además el tamaño muestral es pequeño, por lo que también resulta beneficioso agrupar variables.
+
+**•	Por último, incorpore a la base de datos la/s variable/s nueva/s con las puntuaciones factoriales y realice con ellas un clúster de las CCAA utilizando el método de Ward. Determine el número más adecuado de clústeres, e interprete los resultados.**
+
+Se realiza el cálculo de las puntuaciones asociadas al análisis factorial y se cargan en el análisis clúster. A continuación, se muestra el gráfico del análisis clúster sin agrupar objetos y se muestra la altura sobre la que se realizará el corte:
+```{r echo=FALSE}
+# Se calculan las puntaciones factoriales del análisis factorial
+scores<-as.matrix(calidad[2:13])%*%as.matrix(analisis.fact$loadings)
+kable(scores)%>%kable_styling(bootstrap_options = "striped",full_width = F, position = "left")
+# Se introducen como datos del análisis cluster las puntuaciones obtenidas.
+analisis.cluster<-hclust(dist(scores),method = "ward.D")
+plot(analisis.cluster,main="Análisis clúster")
+abline(h=2000,col="red")
+cat('','\n\n')
+```
+
+Se muestra el análisis clúster con 7 conglomerados:
+```{r echo=FALSE}
+# Se crea el objeto que delimita el número de conglomerados
+objetos<-cutree(analisis.cluster,k=7)
+# Se crea una tabla con los 7 conglomerados
+cent<-NULL
+for(k in 1:7){
+  cent<-rbind(cent,colMeans(scores[objetos==k,,drop=F]))
+}
+analisis.cluster.cong<-hclust(dist(cent),method="ward.D",members=table(objetos))
+# Se muestra el gráfico con 7 conglomerados:
+plot(analisis.cluster.cong,hang = -1,main="Análisis clúster con 7 conglomerados")
+cat('','\n\n')
+```
+
+De izquierda a derecha los conglomerados representan:
+
+* El clúster 1 incluye a : Extremadura
+* El clúster 6 incluye a : Andalucía, Canarias, Castilla-La Mancha, Murcia y Ceuta
+* El clúster 3 incluye a : Navarra y País Vasco
+* El clúster 2 incluye a : Cataluña y Madrid
+* El clúster 4 incluye a : Valencia, Baleares y Cantabria
+* El clúster 5 incluye a : Aragón, Asturias y La Rioja
+* El clúster 7 incluye a : Castilla y León, Galicia y Melilla
+
+Cada conglomerado reúne las comunidades autónomas con calidad de vida similar en base a los factores extraídos mediante análisis factorial.
+
+Se deducen tres grandes grupos que de forma muy genérica se podrían establecer en :
+
+* Calidad de vida baja: clústeres 1 y 6
+* Calidad de vida media: clústeres 5 y 7
+* Calida de vida alta: clústeres 2,3 y 4
+
+
+
+**4. Análisis de Correspondencias Múltiple**
+
+**El conjunto de datos de hardware de Hartigan screws.sav contiene información sobre las características de los tornillos, pernos, tuercas y tachuelas.**
+
+**• Analice estos datos a través de un Análisis de Correspondencias Múltiple. Comente los resultados e interprete las dimensiones obtenidas.**
+
+```{r echo=FALSE}
+suppressWarnings(suppressPackageStartupMessages(library(haven)))
+screws<-read_sav("C:/Users/rojo_/Desktop/MASTER/PRIMER CUATRIMESTRE 2019-2020/METODOS ESTADISTICOS/PEC 2021-2022/PEC_2020-21/screws.sav",)
+```
+
+El conjunto de datos contiene 7 variables, de las cuales 6 son de tipo nominal (explican caracteríticas cualitativas) y pueden ser tratadas como factores. La variable "long" es la única que puede ser tratada como variable ordinal. El conjunto de datos solo dispone de 24 observaciones por lo que resulta apropiado realizar un análisis de correspondencias.
+
+Se realiza el análisis de correspondencias múltiple para agrupar los niveles con características similares en nuevas dimensiones cuantitativas.
+
+```{r echo=FALSE}
+suppressWarnings(suppressPackageStartupMessages(library(FactoMineR)))
+suppressWarnings(suppressPackageStartupMessages(library(factoextra)))
+```
+
+En primer lugar, se realiza una inspección descriptiva de los datos con el recuento por nivel de factor:
+```{r echo=FALSE}
+# Se transforma la base de datos de tibble a dataframe y se incluyen sólo las 6 primeras variables, ya que la variable "objeto" no aporta información.
+screws.df<-as.matrix.data.frame(screws[,1:6])
+screws.df<-as.data.frame(screws.df,str)
+# Se cambian a datos de tipo carácter.
+for(columna in 1:6){
+  screws.df[,columna]<-as.character(screws.df[,columna])
+}
+# Se asignan las etiquetas como valores.
+#Columna 1
+for (i in 1:24){
+  if (screws.df[i,1]=="1") {screws.df[i,1]="No_rosca"} 
+  else
+  {screws.df[i,1]='Si_rosca'}
+}
+#Columna 2
+for (i in 1:24){
+  if (screws.df[i,2]=="1") {screws.df[i,2]="PLANA"} 
+  else
+  if (screws.df[i,2]=="1") {screws.df[i,2]="CONO"} 
+  else
+   {screws.df[i,2]="REDONDO"} 
+}
+#Columna 3
+for (i in 1:24){
+  if (screws.df[i,3]=="1") {screws.df[i,3]="Ranura"} 
+  else
+  if (screws.df[i,3]=="2") {screws.df[i,3]="Ninguna"} 
+  else
+  {screws.df[i,3]="Estrella"} 
+}
+#Columna 4
+for (i in 1:24){
+  if (screws.df[i,4]=="1") {screws.df[i,4]="Plana"} 
+  else
+  {screws.df[i,4]='Punta'}
+}
+#Columna 5
+for (i in 1:24){
+  if (screws.df[i,5]=="1") {screws.df[i,5]="No_Cobre"} 
+  else
+  {screws.df[i,5]='Si_Cobre'}
+}
+#Columna 6 se deja como está, son unidades en pulgadas.
+#COnvertir a factor las columnas
+for (columna in 1:6){
+  screws.df[,columna]<-as.factor(screws.df[,columna]) 
+}
+# Se muestra el sumario
+kable(summary(screws.df))%>%kable_styling(bootstrap_options = "striped",full_width = F, position = "left")
+```
+Se muestra el sumario en formato gráfico:
+```{r echo=FALSE}
+for(columna in 1:6) {
+  plot(factor(screws.df[,columna]),col=heat.colors(5),main=colnames(screws.df[columna]),ylab="Cuenta")
+}
+```
+
+
+Se estima el modelo y se muestran los autovalores junto a las varianzas retenidas por cada dimensión:
+```{r echo=FALSE}
+analisis.corres<-MCA(screws.df,graph = F)
+kable(analisis.corres$eig)%>%kable_styling(bootstrap_options = "striped",full_width = F, position = "left")
+```
+
+El 67,5% de la varianza queda explicada con las tres primeras dimensiones.
+
+Se muestra el gráfico:
+
+```{r echo=FALSE}
+fviz_screeplot(analisis.corres,addlabels=T,ylim=c(0,40),main="Extracción de dimensiones por análisis de correspondencias",barfill="palegoldenrod")
+```
+
+Se realiza la estimación para 3 dimensiones y se muestran las coordenadas por dimensión:
+```{r echo=FALSE}
+analisis.corres.3d<-MCA(screws.df,graph = F,ncp = 3)
+# Qué contiene cada dimensión
+kable(analisis.corres.3d$var$coord)%>%kable_styling(bootstrap_options = "striped",full_width = F, position = "left")
+```
+
+Las variables más representadas en cada dimensión son:
+
+* Dimensión 1: 
+  + No_rosca
+  + Si_rosca
+  + PLANA
+  + REDONDO
+  + Ninguna
+  + Ranura
+  + Plana
+  + Punta
+  
+* Dimensión 2: 
+  + Estrella
+  + Longitud 5
+  
+* Dimensión 3: 
+  + No_Cobre
+  + Si_Cobre
+  + Longitud 1
+  + Longitud 2
+  + Longitud 3
+  + Longitud 4
+  
+Se genera un biplot simétrico.
+
+```{r echo=FALSE}
+fviz_mca_biplot(analisis.corres.3d,repel = T,axes=c(1,2))
+```
+
+Se presenta graficamente la correlación entre variables y dimensiones principales:
+```{r echo=FALSE}
+fviz_mca_var(analisis.corres.3d,choice= "mca.cor",repel = T,col.row="cos2")
+```
+
+Las variables "rosca", "cabeza" y "punta" están muy correlacionadas con la dimensión 1 y poco correlacionadas con la dimensión 2.
+
+La variable "muesca" está muy correlacionada con las dimensiones 1 y 2.
+
+La variable "cobre" está poco correlacionada con las dimensiones 1 y 2.
+
+La variable "long" está muy correlacionada con la dimensión 2 y poco correlacionada con la dimensión 1.
+
+Se muestra en un gráfico la calidad en la representación de las categorías de las variables:
+```{r echo=FALSE}
+fviz_mca_var(analisis.corres.3d,col.var="cos2",repel = T,col.row="cos2",gradient.cols=c("red","orange","yellow","green"))
+fviz_cos2(analisis.corres.3d,choice = "var",axes = 1:2,ylim=c(0,1),fill="palegoldenrod")
+```
+
+Las variables mejor representadas son "Si_rosca", "Ranura", "REDONDO", "No_rosca","Ninguna" y "Plana".
+
+Las variables peor representadas son "No_Cobre" y "Si_Cobre".
+
+Se muestra las contribuciones de las filas a las dimensiones:
+
+Contribución de las filas a la dimensión 1:
+```{r echo=FALSE}
+fviz_contrib(analisis.corres.3d,choice = "var",axes=1,top = 10,ylim=c(0,15),fill="palegoldenrod")
+```
+
+Contribución de las filas a la dimensión 2:
+```{r echo=FALSE}
+fviz_contrib(analisis.corres.3d,choice = "var",axes=2,top = 10,ylim=c(0,35),fill="palegoldenrod")
+```
+
+Contribución de las filas a la dimensión 3:
+```{r echo=FALSE}
+fviz_contrib(analisis.corres.3d,choice = "var",axes=3,top = 10,ylim=c(0,30),fill="palegoldenrod")
+```
+
+Contribución de las filas a todas las dimensiones:
+```{r echo=FALSE}
+fviz_contrib(analisis.corres.3d,choice = "var",axes=1:3,top = 10,ylim=c(0,15),fill="palegoldenrod")
+```
+
+Se realiza el análisis de los objetos.
+
+Se muestran las coordenadas de los primeros objetos:
+```{r echo=FALSE}
+obj<-get_mca_ind(analisis.corres.3d)
+kable(head(obj$coord))%>%kable_styling(bootstrap_options = "striped",full_width = F, position = "left")
+```
+
+Se muestra la calidad de la representación de los primeros objetos:
+```{r echo=FALSE}
+obj<-get_mca_ind(analisis.corres.3d)
+kable(head(obj$contrib))%>%kable_styling(bootstrap_options = "striped",full_width = F, position = "left")
+```
+
+Se muestran las contribuciones de los primeros objetos:
+```{r echo=FALSE}
+obj<-get_mca_ind(analisis.corres.3d)
+kable(head(obj$cos2))%>%kable_styling(bootstrap_options = "striped",full_width = F, position = "left")
+```
+
+Se muestra en un gráfico la calidad en la representación de las categorías de los objetos:
+```{r echo=FALSE}
+fviz_mca_ind(analisis.corres.3d,col.var="cos2",repel = T,col.ind="cos2",gradient.cols=c("red","orange","yellow","green"))
+fviz_cos2(analisis.corres.3d,choice = "ind",axes = 1:3,ylim=c(0,1),fill="palegoldenrod")
+```
+
+Se muestra las contribuciones de los objetos a las dimensiones:
+
+Contribución de los objetos a las dimensión 1:
+```{r echo=FALSE}
+fviz_contrib(analisis.corres.3d,choice = "ind",axes=1,top = 10,ylim=c(0,10),fill="palegoldenrod")
+```
+
+Contribución de los objetos a las dimensión 2:
+```{r echo=FALSE}
+fviz_contrib(analisis.corres.3d,choice = "ind",axes=2,top = 10,ylim=c(0,60),fill="palegoldenrod")
+```
+
+Contribución de los objetos a las dimensión 3:
+```{r echo=FALSE}
+fviz_contrib(analisis.corres.3d,choice = "ind",axes=3,top = 10,ylim=c(0,20),fill="palegoldenrod")
+```
+
+Contribución de los objetos a las tres dimensiones
+```{r echo=FALSE}
+fviz_contrib(analisis.corres.3d,choice = "ind",axes=1:3,top = 10,ylim=c(0,25),fill="palegoldenrod")
+```
+
+Se agrupan los objetos por grupos similares en elipses de confianza:
+```{r echo=FALSE}
+fviz_mca_ind(analisis.corres.3d,label="none",habillage = 2,palette = c("cadetblue3","coral"),addEllipses = T,ellipse.type="confidence")
+```
+
+Se realiza el filtrado de los resultados:
+
+Se muestran las variables con mayor calidad de representación:
+```{r echo=FALSE}
+# Se seleccionan las variables con cos2 >= 0.5
+fviz_mca_var(analisis.corres.3d,col.var="cos2",repel = T,col.row="cos2",gradient.cols=c("red","orange","yellow","green"),select.var = list(cos2=0.5))
+```
+
+Se muestran los 5 objetos y las 5 variables que más contribuyen a las dimensiones:
+```{r echo=FALSE}
+fviz_mca_biplot(analisis.corres.3d,select.ind=list(contrib=5),select.var=list(contrib=5))
+```
+
+Hay tres grupos de objetos:
+
+* Un grupo de objetos está relacionado positivamente con la dimensión 1 y además estos objetos están relacionados entre ellos, sin apenas relación con la dimensión 2. Estos objetos comparten características similares.
+
+* Hay un segundo grupo que está relacionado negativamente con la dimensión 1 y además están relacionados entre ellos, sin apenas relación con la dimensión 2.Estos objetos comparten características similares.
+
+* El tercer grupo se refiere al único objeto de la muestra con la muesca de estrella, está relacionado negativamente con la dimensión 1 y positivamente con la dimensión 2.
+
+**5. Escalamiento Multidimensional y Análisis Cluster**
+
+**•	Con los datos del fichero Datos CCAA.xlsx realice el escalamiento multidimensional que crea más oportuno. Interprete las dimensiones obtenidas.**
+
+Se realiza un escalamiento multidimensional no métrico (se presupone una relación no-lineal entre las proximidades y las distancias de las Comunidades Autónomas). Se muestra el gráfico que resulta tras el escalamiento:
+```{r echo=FALSE}
+CCAA<-read_excel("C:/Users/rojo_/Desktop/MASTER/PRIMER CUATRIMESTRE 2019-2020/METODOS ESTADISTICOS/PEC 2021-2022/PEC_2020-21/DatosCCAA.xlsx")
+CCAA.matrix<-as.matrix(CCAA[,-1])
+#Modelo de escalamiento multidimensional no métrico (no presupone una relación lineal entre las proximidades y las distancias)
+suppressWarnings(suppressPackageStartupMessages(library(MASS)))
+# Se calculan la matriz simétrica con las distancias euclídeas entre las filas
+distancia<-dist(CCAA.matrix)
+# Se ajusta el modelo con dos dimensiones
+CCAA.MDS<-isoMDS(distancia)
+# Se representa de forma gráfica
+plot(CCAA.MDS$points,type="n",main="MDS no métrico")
+etiquetas<-c(CCAA$`Comunidad Autónoma`)
+text(CCAA.MDS$points,labels=etiquetas,cex=0.6,col = "red")
+```
+
+Se muestra el ajuste del escalamiento.
+```{r echo=FALSE}
+CCAA.SPH<-Shepard(distancia,CCAA.MDS$points)
+plot(CCAA.SPH,pch="*",col="red",main="Ajuste")
+lines(CCAA.SPH$x,CCAA.SPH$yf,type="S",col="blue")
+```
+
+
+**•	Utilizando las coordenadas en las dimensiones obtenidas para cada comunidad autónoma, realice un análisis cluster, seleccione el número de clústeres más adecuado y describa cada grupo en función de las características de las comunidades autónomas incluidas en él.**
+
+Se muestran las coordenadas obtenidas para cada comunidad autónoma:
+```{r echo=FALSE}
+CCAA.dims<-as.matrix(CCAA.MDS$points)
+colnames(CCAA.dims)<-c("Dim1","Dim2")
+rownames(CCAA.dims)<-etiquetas
+kable(CCAA.dims)%>%kable_styling(bootstrap_options = "striped",full_width = F, position = "left")
+```
+
+Las coordenadas se cargan en el análisis clúster. A continuación, se muestra el gráfico del análisis clúster:
+```{r echo=FALSE,fig.height=10}
+analisis.cluster.CCAA<-hclust(dist(CCAA.dims),method = "ward.D")
+plot(analisis.cluster.CCAA,main="Análisis clúster")
+```
+
+Se muestra el análisis clúster con 6 conglomerados:
+```{r echo=FALSE}
+# Se crea el objeto que delimita el número de conglomerados
+objetos.CCAA<-cutree(analisis.cluster.CCAA,k=6)
+# Se crea una tabla con los 6 conglomerados
+cent<-NULL
+for(k in 1:6){
+  cent<-rbind(cent,colMeans(scores[objetos.CCAA==k,,drop=F]))
+}
+analisis.cluster.CCAA<-hclust(dist(cent),method="ward.D",members=table(objetos.CCAA))
+# Se muestra el gráfico con 6 conglomerados:
+plot(analisis.cluster.CCAA,hang = -1,main="Análisis clúster con 6 conglomerados")
+cat('','\n\n')
+```
+
+De izquierda a derecha los conglomerados representan:
+
+* El clúster 4 incluye a : Valencia.
+* El clúster 6 incluye a : Madrid, Andalucía y Cataluña
+* El clúster 3 incluye a : Castilla la Mancha, Canarias, País Vasco, Castilla y León y Galicia
+* El clúster 5 incluye a : La Rioja, Cantabria y Navarra.
+* El clúster 1 incluye a : Asturias y Extremadura
+* El clúster 2 incluye a : Murcia, Aragón y Baleares
+
+
+**6. Análisis de Correlación Canónica**
+
+**El fichero Datos CCAA2.xlsx contiene información relativa al uso de la economía colaborativa procedente de la Encuesta sobre equipamiento y uso de tecnologías de información y comunicación en los hogares 2018.**
+
+**En concreto, las tres primeras columnas hacen referencia al porcentaje de usuarios de internet que utilizan webs o apps de cara a obtener un servicio de alojamiento, y las tres siguientes hacen referencia al servicio de transporte.**
+
+**•	Analice esta información mediante un análisis de correlación canónica y describa y comente los resultados obtenidos.**
+
+En primer lugar se normalizan las variables. A continuación dividimos las variables de la muestra en dos grupos. Cada grupo contiene variables relacionadas entre sí, de modo que se crea un primer grupo de tres variables que se refieren al porcentaje de usuarios de internet que utilizan webs o apps de cara a obtener un servicio de alojamiento, a este primer grupo de variables junto a sus observaciones lo denominamos por "aloj". Se crea un segundo grupo de tres variables que se refieren al servicio de transporte, este segundo grupo lo denominamos "trans". Cada grupo de variables es una matriz que será empleada para realizar el análisis de correlación canónica.
+
+Se calculan las matrices de correlaciones y se representan de forma gráfica:
+```{r echo=FALSE}
+CCAA.2<-read_excel("C:/Users/rojo_/Desktop/MASTER/PRIMER CUATRIMESTRE 2019-2020/METODOS ESTADISTICOS/PEC 2021-2022/PEC_2020-21/DatosCCAA2.xlsx")
+CCAA.2<-as.data.frame(CCAA.2)
+# El modelo de análisis de correlación canónica necesita usar datos normalizados, por lo que creamos una función para normalizar datos:
+norm<-function(variable){
+  nor_estandar<-(variable-mean(variable))/sd(variable)
+  list(nor_estandar)
+}
+# Aplicamos la fórmula a las columnas numéricas del modelo.
+for(columna in 2:7){
+  CCAA.2[,columna]<-norm(CCAA.2[,columna])
+}
+# Se divide el conjunto de datos en dos matrices, por un lado una matriz con las 3 variables asociadas al alojamiento, y por otro lado, una matriz con 3 variables que se asocian al transporte.
+aloj<-as.data.frame(CCAA.2[,2:4])
+trans<-as.data.frame(CCAA.2[,5:7])
+# Se renombran las variables de la matriz aloj
+colnames(aloj)<-c("Aloj_global","Aloj_inter","Aloj_otros")
+colnames(trans)<-c("Trans_global","Trans_inter","Trans_otros")
+# Se observa la correlación
+suppressWarnings(suppressPackageStartupMessages(library(CCA)))
+# Se calcula la matriz de correlaciones
+correl<-matcor(aloj,trans)
+img.matcor(correl,type = 2)
+```
+
+Se observa una alta correlación en las dos matrices de datos "aloj" y "trans". También hay una alta correlación en algunos puntos de la correlación cruzada entre las dos matrices, esto es, entre "aloj" y "trans".
+
+Estas altas correlaciones son necesarias para poder continuar con el análisis de correlación canónica.
+
+Se realiza el análisis y se muestra un gráfico con la correlación canónica que tiene cada dimensión:
+
+```{r echo=FALSE}
+analisis.canon<-cc(aloj,trans)
+# Se muestra el gráfico de barras con la correlación canónica que se explica con cada dimensión.
+barplot(analisis.canon$cor,xlab="Dimensión",ylab="Correlación canónica",ylim = c(0,1),names.arg = 1:3,col="palegoldenrod")
+```
+
+Se obtienen tres dimensiones, una por cada variable que tiene la matriz "aloj".
+
+Se observa que la primera dimensión tiene un alto grado de correlación canónica, cercano a 1. Esta dimensión representa a las variables de las matrices "aloj" y "trans" que tienen una alta correlación entre ellas. La segunda dimensión tiene un valor de 0.4 y la tercera dimensión no llega a 0.2, por lo que esta última resulta prescindible.
+
+Se estudian los resultados de forma gráfica con el uso de dos dimensiones.
+
+A continuación se muestra la dispersión de las variables con respecto a las dos primeras dimensiones y su relación con las mismas.
+```{r echo=FALSE}
+plt.cc(analisis.canon,type="v",var.label = T)
+```
+
+Los triángulos azules representan las variables de la matriz "trans" mientras que los puntos rojos representan las variables de la matriz "aloj".
+
+Cinco de las variables de las matrices "aloj" y "trans", tienen una correlación significativa (comprendidas entre 0.5 y 1) . Las variables tienen mucha representación en la dimensión 1 y poca representación con respecto a la dimensión 2.
+
+Como todos los puntos se encuentran representados por la dimensión 1 con signo negativo la interpretación es inversa, esto es, a menor valor mayor uso de aplicaciones web de transportes. Y como todos los puntos se encuetran representados por la dimensión 2 con signo positivo, la interpretación es la habitual, a mayor valor mayor uso de las webs de alojamientos.
+
+Ahora se muestra la dispersión de las Comunidades Autónomas con cada una de las dos dimensiones principales y su relación con las mismas.
+```{r echo=FALSE}
+plt.cc(analisis.canon,type="i")
+```
+
+Las Comunidades Autónomas se distribuyen de la siguiente forma:
+
+* Primer cuadrante: relación negativa con la dimensión 1 (interpretación inversa) y relación positiva con la dimensión 2. Comunidades Autónomas: `r CCAA.2$...1[c(7,8,9,15)]` y `r CCAA.2$...1[17]` hacen mucho uso de las aplicaciones web de alojamientos y transportes.
+
+* Segundo cuadrante: relación positiva con la dimensión 1 (interpretación inversa) y relación positiva con la dimensión 2. Comunidades Autónomas: `r CCAA.2$...1[12]` y `r CCAA.2$...1[14]` hacen poco uso de las aplicaciones web de transportes y mucho uso de las webs de alojamiento.
+
+* Tercer cuadrante: relación negativa con la dimensión 1 (interpretación inversa) y relación negativa con la dimensión 2. Comunidades Autónomas: `r CCAA.2$...1[c(2,10,11,13)]` y `r CCAA.2$...1[16]` hacen mucho uso de las aplicaciones web de transporte y poco uso de las aplicaciones web de alojamientos.
+
+* Cuarto cuadrante: relación positiva con la dimensión 1 (interpretación inversa) y relación negativa con la dimensión 2. Comunidades Autónomas: `r CCAA.2$...1[c(1,3,4,5)]` y `r CCAA.2$...1[6]` hacen poco uso de las aplicaciones web de transporte y de las aplicaciones web de alojamientos.
+
+
+**7. Machine Learning**
+
+**Se ha llevado a cabo una campaña de marketing por parte de una empresa sobre 9.134 de sus clientes en cuatro estados de Estados Unidos para ofrecerles un determinado producto. Se dispone de información demográfica, social y de otro tipo de datos relacionados con su gestión económica.**
+
+**Las 24 variables contenidas en la base de datos son las siguientes:**
+
+**•	Customer  (Código de Cliente)**
+
+**•	State  (Estado)**
+
+**•	Customer Lifetime Value  (Valor de vida del cliente)**
+
+**•	Response (Respuesta)**
+
+**•	Coverage  (Cobertura)**
+
+**•	Education  (Nivel de educación)**
+
+**•	Effective To Date (Vigente hasta la fecha)** 
+
+**•	EmploymentStatus  (Estatus de Empleo)**
+
+**•	Gender  (Género)**
+
+**•	Income (Ingresos)**
+
+**•	Location Code (Código de localización)**
+
+**•	Marital Status (Estado civil)**
+
+**•	Monthly Premium Auto (Auto Premio Mensual)**
+
+**•	Months Since Last Claim (Meses desde la última reclamación)**
+
+**•	Months Since Policy Inception (Meses desde el inicio de la poliza)**
+
+**•	Number of Open Complaints (Número de quejas abiertas)**
+
+**•	Number of Policies (Número de pólizas)**
+
+**•	Policy Type (Tipo de póliza)**
+
+**•	Policy (Pólizas)**
+
+**•	Renew Offer Type  (Renovación tipo de oferta)**
+
+**•	Sales Channel (Canal de ventas)**
+
+**•	Total Claim Amount (Cantidad total de reclamación)**
+
+**•	Vehicle Class (Tipo de vehículo)**
+
+**•	Vehicle SizesSEE (Tamaño del vehículo)** 
+
+**El objetivo general de este ejercicio es aplicar diferentes métodos y algoritmos de clasificación con el objetivo de seleccionar aquel o aquellos métodos que sean óptimos a la hora de predecir la variable Response (valores: Yes, No, es decir si la campaña ha sido un éxito o no). De los siguientes modelos, estime al menos uno de cada tipo:**
+
+**1)	Modelo Lineal Generalizado (Regresión Logística, Regresión Probit).**
+**2)	Árboles de decisión. (CHAID, CART, C5, Random Forest).**
+**3)	Redes Neuronales. (Perceptron Multicapa, Función de Base Radial).**
+
+**Utilice el 80% de la muestra para el entrenamiento de los modelos y el restante 20% para test.**
+
+**Compare los resultados obtenidos por los diferentes modelos construidos, y seleccione el que finalmente utilizaría, utilizando como criterio el área bajo la curva ROC.**
+
+Se realiza la división de la muestra en dos submuestras, una con el 80% de los datos que será el conjunto de datos utilizados para entrenar al modelo y un 20% de datos que se utilizará para testear el desempeño del modelo.
+
+Los datos de entrenamiento se configuran en validación cruzada con 5 remuestreos y 3 iteraciones. 
+```{r echo=FALSE,warning=FALSE}
+# Se cargan los datos csv con cabeceras y separador con coma.
+campa<-read.csv("C:/Users/rojo_/Desktop/MASTER/PRIMER CUATRIMESTRE 2019-2020/METODOS ESTADISTICOS/PEC 2021-2022/PEC_2020-21/Campa±a.csv",header = T,sep=",")
+
+# Se transfroma el conjunto de datos a dataframe
+campa<-as.data.frame(campa)
+
+# Se establecen como factores las variables de tipo carácter.
+for (columna in 1:24) {
+  if(is.character(campa[,columna])){
+    campa[,columna]<-as.factor(campa[,columna])
+  }
+}
+
+# Sacamos del conjunto de datos la variable "Customer" por no aportar valor.
+campa<-campa[,2:24]
+
+# Preparamos las muestras de entrenamiento y de test. Se define una semilla para no tener distintos resultados.
+set.seed(99)
+
+# Se define en 80% el tamaño de la muestra de entrenamiento.
+train_sample<-sample(nrow(campa),0.8*nrow(campa))
+entrena<-campa[train_sample,]
+test<-campa[-train_sample,]
+
+# Se carga la librería caret
+suppressWarnings(suppressPackageStartupMessages(library(caret)))
+
+#Se crea la función fiveStats que devolverá formateadas las 5 métricas 
+fiveStats<-function(...)c(twoClassSummary(...),defaultSummary(...))
+
+#Se configura el traincontrol con validación cruzada, 5 iteraciones de remuestreo y 3 repeticiones. Obviamente se empleará el mismo en todos los modelos.
+control<-trainControl(method="repeatedcv",number=5,repeats=3, classProbs=T,summaryFunction=fiveStats)
+```
+
+> **MODELOS LINEALES GENERALIZADOS**
+
+Se muestra a continuación el resultado de las métricas obtenidas por un modelo GLM de familia logit con los datos de entrenamiento:
+```{r echo=FALSE,warning=FALSE}
+# Se realiza la estimación de una clasificación logística mediante un modelo GLM
+GLM<-train(Response~.,data = entrena,method="glm",family=binomial("logit"), metric="ROC",trControl=control)
+kable(GLM$results)%>%kable_styling(bootstrap_options = "striped",full_width = F, position = "left")
+```
+
+Se muestran las variables más importantes según el modelo GLM logit:
+```{r echo=FALSE,fig.height=20}
+plot(varImp(GLM))
+```
+
+Se calcula el ROC del modelo GLM logit con los datos de test y se presenta la curva ROC:
+```{r echo=FALSE,warning=FALSE}
+# Se calculan las predicciones con la muestra de test
+GLM.test<-predict(GLM,test,type = "prob")
+
+# Se calcula el AUC de la muestra de test
+suppressWarnings(suppressPackageStartupMessages(library(pROC)))
+GLM.test.ROC<-roc(test$Response,GLM.test[,"Yes"])
+```
+* El ROC del modelo de validación GLM logit es `r round(GLM.test.ROC$auc,2)`
+```{r echo=FALSE}
+# Grafico de la curva ROC con los datos de test
+plot.roc(GLM.test.ROC,col = "red", main="Curva ROC del modelo GLM")
+```
+
+Se muestra a continuación el resultado de las métricas obtenidas por un modelo GLM de familia probit con los datos de entrenamiento:
+```{r echo=FALSE,warning=FALSE}
+# Se realiza la estimación de una clasificación mediante un modelo GLM tipo probit
+GLM.probit<-train(Response~.,data = entrena,method="glm",family=binomial("probit"), metric="ROC",trControl=control)
+kable(GLM.probit$results)%>%kable_styling(bootstrap_options = "striped",full_width = F, position = "left")
+```
+
+Se muestran las variables más importantes según el modelo GLM probit:
+```{r echo=FALSE,fig.height=20}
+plot(varImp(GLM.probit))
+```
+
+Se calcula el ROC del modelo GLM probit con los datos de test y se presenta la curva ROC:
+```{r echo=FALSE,warning=FALSE}
+# Se calculan las predicciones con la muestra de test
+GLM.probit.test<-predict(GLM.probit,test,type = "prob")
+
+# Se calcula el AUC de la muestra de test
+suppressWarnings(suppressPackageStartupMessages(library(pROC)))
+GLM.probit.test.ROC<-roc(test$Response,GLM.probit.test[,"Yes"])
+```
+* El ROC del modelo de validación GLM probit es `r round(GLM.probit.test.ROC$auc,2)`
+```{r echo=FALSE}
+# Grafico de la curva ROC con los datos de test
+plot.roc(GLM.probit.test.ROC,col = "red", main="Curva ROC del modelo GLM probit")
+```
+
+> **MODELOS DE ÁRBOLES DE DECISIÓN**
+
+Se realiza a continuación la estimación de un modelo random forest con el conjunto de datos de entrenamiento y se muestran las métricas obtenidas:
+```{r echo=FALSE}
+# Después de realizar varias pruebas sobre la configuración del grid se realiza la estimación a través de un modelo de árbol de decisión tipo random forest con 4 predictores.
+RF.grid<-expand.grid(mtry=4)
+RF<-train(Response~.,data=entrena,method="rf",metric="ROC",trControl=control,tuneGrid=RF.grid)
+# Se imprimen los resultados
+kable(RF$results)%>%kable_styling(bootstrap_options = "striped",full_width = F, position = "left")
+```
+
+Se muestran las variables más importantes del modelo RF:
+```{r echo=FALSE,fig.height=20}
+plot(varImp(RF))
+```
+
+Se calcula el ROC del modelo RF con los datos de test y se presenta la curva ROC:
+```{r echo=FALSE,warning=FALSE}
+# Se calculan las predicciones con la muestra de test
+RF.test<-predict(RF,test,type = "prob")
+
+# Se calcula el AUC de la muestra de test
+suppressWarnings(suppressPackageStartupMessages(library(pROC)))
+RF.test.ROC<-roc(test$Response,RF.test[,"Yes"])
+```
+* El ROC del modelo de validación RF es `r round(RF.test.ROC$auc,2)`
+
+```{r echo=FALSE}
+# Grafico de la curva ROC con los datos de test
+plot.roc(RF.test.ROC,col = "red", main="Curva ROC del modelo RF")
+```
+
+Se prueba, un árbol C5.0, se realiza su estimación usando el conjunto de datos de entrenamiento. Se muestran las métricas obtenidas:
+```{r echo=FALSE}
+# Después de varias pruebas sobre la configuración del grid se realiza la estimación a través de un modelo de árbol de decisión tipo C5.0 con 10 trials, modelo de reglas y con winnow.
+suppressWarnings(suppressPackageStartupMessages(library(C50)))
+C5.grid<-expand.grid(trials=10,model="rules",winnow=T)
+C5<-train(Response~.,data=entrena,method="C5.0",metric="ROC",trControl=control,tuneGrid=C5.grid)
+# Se imprimen los resultados
+kable(C5$results)%>%kable_styling(bootstrap_options = "striped",full_width = F, position = "left")
+```
+
+Se muestran las variables más importantes del modelo C5:
+```{r echo=FALSE,fig.height=20}
+plot(varImp(C5))
+```
+
+Se calcula el ROC del modelo C5 con los datos de test y se presenta la curva ROC:
+```{r echo=FALSE,warning=FALSE}
+# Se calculan las predicciones con la muestra de test
+C5.test<-predict(C5,test,type = "prob")
+
+# Se calcula el AUC de la muestra de test
+suppressWarnings(suppressPackageStartupMessages(library(pROC)))
+C5.test.ROC<-roc(test$Response,C5.test[,"Yes"])
+```
+* El ROC del modelo de validación C5 es `r round(C5.test.ROC$auc,2)`
+
+```{r echo=FALSE}
+# Grafico de la curva ROC con los datos de test
+plot.roc(C5.test.ROC,col = "red", main="Curva ROC del modelo C5")
+```
+
+> **MODELOS DE REDES NEURONALES**
+
+Se realiza a continuación la estimación de un modelo Perceptron Multicapa con 20 neuronas usando el conjunto de datos de entrenamiento. Se muestran las métricas obtenidas:
+```{r echo=FALSE,warning=FALSE}
+#  Después de realizar varias pruebas sobre la configuración del grid se realiza la estimación a través de un modelo de árbol de decisión tipo Perceptron Multicapa con 20 neuronas.
+PM.grid<-expand.grid(size=20)
+PM<-train(Response~.,data=entrena,method= "mlp", metric="ROC", trControl=control, tuneGrid=PM.grid)
+# Se imprimen los resultados
+kable(PM$results)%>%kable_styling(bootstrap_options = "striped",full_width = F, position = "left")
+```
+
+Se muestran las variables más importantes del modelo Perceptron Multicapa:
+```{r echo=FALSE,fig.height=6}
+plot(varImp(PM))
+```
+
+Se calcula el ROC del modelo Perceptron Multicapa con los datos de test y se presenta la curva ROC:
+```{r echo=FALSE,warning=FALSE}
+# Se calculan las predicciones con la muestra de test
+PM.test<-predict(PM,test,type = "prob")
+
+# Se calcula el AUC de la muestra de test
+suppressWarnings(suppressPackageStartupMessages(library(pROC)))
+PM.test.ROC<-roc(test$Response,PM.test[,"Yes"])
+```
+* El ROC del modelo de validación Perceptron Multicapa es `r round(PM.test.ROC$auc,2)`
+
+```{r echo=FALSE}
+# Grafico de la curva ROC con los datos de test
+plot.roc(PM.test.ROC,col = "red", main="Curva ROC del modelo PM")
+```
+
+> **COMPARACIÓN DE RESULTADOS**
+
+Se muestra una tabla comparativa con el ROC obtenido por cada modelo utilizando el conjunto de datos de test.
+```{r echo=FALSE}
+# Se crea manualmente un vector con los valores ROC obtenidos en cada modelo"
+ROC<-c(round(GLM.test.ROC$auc,4),round(GLM.probit.test.ROC$auc,4),round(RF.test.ROC$auc,4),round(C5.test.ROC$auc,4),round(PM.test.ROC$auc,4))
+
+# Se establece un vector con los nombres de los modelos
+names.models<-c("GLM logit","GLM probit","Random Forest","C5","Perceptrón Multicapa")
+
+#Se crea una matriz con los datos obtenidos y los nombres de las filas y columnas
+ROC.modelos<-matrix(data=ROC,ncol=1,dimnames = list(names.models,"ROC"))
+
+# Se imprime la tabla con los resultados
+ROC.modelos%>%
+   kbl(caption = "Tabla de resultados") %>%
+   kable_paper(full_width = F)%>%
+   kable_styling(bootstrap_options = c("striped", "hover"),full_width = F)
+
+```
+
+Se observa en la tabla que el mejor modelo, y por lo tanto el que utilizaría para el estudio, y según la métrica ROC obtenida con los datos de test, es el árbol C5.0
+
+
